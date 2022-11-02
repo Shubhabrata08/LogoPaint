@@ -1,0 +1,609 @@
+#include <graphics.h>
+#include <stdlib.h>
+#include <conio.h>
+#include <ctype.h>
+#include <stdio.h>
+#include <iostream.h>
+#include <string.h>
+#include <math.h>
+#include "mouse.h"
+#include "ICONS.H"
+#include <alloc.h>
+#define ON 1
+#define OFF 0
+#define UP 0
+#define DOWN 1
+#define ERASE 1
+#define WRITE 0
+#define interfacecolor 15
+int toolmode=0;//0=NULL 1=PENCIL 2=BRUSH 3=FILL 4=LINE
+int fcolor=WHITE,bcolor=BLACK;
+int pestat=WRITE;
+int charcolor=15;
+int MAX_TOKEN=0;
+char w[100][25];
+int maxx=500;
+int maxy=398;
+void *buf[10][10];
+char a[100];
+double angle =90.0;
+double rad;
+struct fillsettingstype far *backup;
+int penstat=DOWN;
+int currcolor=WHITE;
+int currbkcolor=getbkcolor();
+void cursor(int);
+void mousedraw(int&,int&,int&);
+void getgrstring(char *inputstring)
+{
+setcolor(charcolor);
+outtext(">");
+int stringindex=0,oldcolor;
+char ch,outstring[2];
+outstring[1]=0;
+int xval[255];
+xval[0]=getx();
+do
+{
+cursor(ON);
+int b,xp,yp;
+while(!kbhit())
+{
+getmousepos(&b,&xp,&yp);
+if(b&1==1)
+mousedraw(b,xp,yp);
+}
+ch=getch();
+cursor(OFF);
+if(ch==0)
+getch();
+else{
+	if(ch==8)//backspace
+	{
+	oldcolor=charcolor;
+	--stringindex;
+	if(stringindex<0)
+	stringindex=0;
+
+	moveto(xval[stringindex],gety());
+	setcolor(getbkcolor());
+	outstring[0]=inputstring[stringindex];
+	outtext(outstring);
+	moveto(xval[stringindex],gety());
+	setcolor(oldcolor);
+
+	}
+	else
+	{
+	inputstring[stringindex]=ch;
+
+	outstring[0]=ch;
+	int backup=getcolor();
+	setcolor(charcolor);
+	outtext(outstring);
+	setcolor(backup);
+	++stringindex;
+	xval[stringindex]=getx();
+	}
+	}
+	}while(ch!=13 && ch!=10);
+	/*setcolor(getbkcolor());
+	moveto(getx()-1,gety());
+	outtext(" ");
+	setcolor(oldcolor);*/
+	//inputstring[stringindex++]=' ';
+	inputstring[stringindex]=0;
+	setcolor(fcolor);
+}
+
+void cursor(int on)
+{
+	int curx,oldcolor;
+
+	char uBarStr[2]={'_',0};
+	if(!on)
+	{
+		oldcolor=charcolor;
+		setcolor(getbkcolor());
+	}
+	curx=getx();
+	outtext(uBarStr);
+	moveto(curx,gety());
+
+	if(!on)
+	setcolor(oldcolor);
+}
+void transform(int &x,int &y)
+{
+	x+=maxx/2;
+	y+=maxy/2;
+}
+void forward(double d)
+{
+	double xx=(double)(d+1)*cosl(rad);
+	double yy=(double)(d+1)*sinl(rad);
+	int x1=getx();
+	int y1=gety();
+	if(fabs(xx+x1)<maxx && fabs(yy+y1)<maxy)
+	{
+		linerel(xx,yy);
+	}
+	/*else if((xx+x1)>maxx && (yy+y1)>maxy)
+	{
+		double k=ceil((xx+x1)/maxx);
+		double l=ceil((yy+y1)/maxy);
+		for(;;)
+		{
+
+			if((maxx-x1)<(maxy-y1))
+			{
+				linerel(maxx-x1,yy/k);
+				moveto(1,gety());
+				xx=xx-maxx+x1;
+			}
+		}
+		linerel(xx,yy/k);
+	} */
+	else if(fabs(xx+x1)>maxx)
+	{
+		double k=ceil((xx+x1)/maxx);
+		if(xx>0)
+		{
+		for(;xx>(maxx-x1);xx=xx-maxx+x1)
+		{
+		    linerel(maxx-x1,yy/k);
+		    moveto(1,gety());
+		}
+		linerel(xx,yy/k);
+		}
+		else
+		{
+		for(;fabs(xx)>fabs(0-x1);xx=xx-0+x1)
+		{
+		    linerel(0-x1,yy/k);
+		    moveto(maxx-1,gety());
+		}
+		linerel(xx,yy/k);
+		}
+
+	}
+	else if((yy+y1)>maxy)
+	{
+		double k=ceil((yy+y1)/maxy);
+		for(;yy>(maxy-y1);yy=yy-maxy+y1)
+		{
+		    linerel(xx/k,maxy-y1);
+		    moveto(getx(),1);
+		}
+		linerel(xx/k,yy);
+	}
+
+
+}
+void forwardpu(double d)
+{
+	double xx=(double)(d+1)*cosl(rad);
+	double yy=(double)(d+1)*sinl(rad);
+	moverel(xx,yy);
+}
+void turn(double a)
+{
+	angle+=a;
+	rad =(angle) *((22.0/7.0)/180.0);
+
+}
+
+void command()
+{
+	getgrstring(a);
+
+}
+void tokenize()
+{
+	int l=strlen(a);
+	for(int i=0;a[i]!=NULL,a[i]!=13;i++)
+	{
+		if(a[i]=='['|| a[i]==']')
+		{
+			if(a[i-1]!=32)
+			{
+				for(int j=l+1;j>i;j--)
+				a[j]=a[j-1];
+				a[i]=32;
+				l++;i++;
+			}
+
+			if(a[i+1]!=32)
+			{
+				for(int j=l+1;j>i+1;j--)
+				a[j]=a[j-1];
+				a[i+1]=32;
+				l++;i++;
+			}
+		 }
+	}
+	int j=-1,k=0;
+	for( i=0;i<l;i++)
+	{
+		w[k][++j]=a[i];
+		if(a[i]==32 || a[i]==13)
+		{
+
+			w[k][j]='\0';
+			if(j>=1)
+			k++;
+			j=-1;
+		}
+		if(a[i]=='[' || a[i]==']')
+		{
+			w[i+1][j]='\0';
+			k++;
+			j=-1;
+		}
+	}
+	MAX_TOKEN=k;
+
+}
+float extractParameter(char val[])
+{
+	float p=0;
+	int flag=1;
+	for(int i=0;val[i]!=NULL;i++)
+	{
+		if(isdigit(val[i]) && flag==1)
+		p=p*10+(val[i]-48);
+		else if(isdigit(val[i]))
+		p=p+pow(10,flag--)*(val[i]-48);
+		else if(val[i]=='.')
+		flag=-1;
+
+	}
+	return p;
+}
+void analyze(char w[][25],int start,int end)
+{
+	if(pestat==ERASE)
+	{
+	setcolor(getbkcolor());
+	}
+	//for(int r=start;r<end;r++)
+	//cout<<w[r]<<" ";
+
+	for(int i=start;i<end;i++)
+	{
+
+		if(strcmpi("FD",w[i])==0)
+		{
+			i++;
+			if(penstat==DOWN)
+			forward(extractParameter(w[i]));
+			else
+			forwardpu(extractParameter(w[i]));
+
+		}
+		else if(strcmpi("BK",w[i])==0)
+		{
+			i++;
+			if(penstat==DOWN)
+			forward(-extractParameter(w[i]));
+			else
+			forwardpu(-extractParameter(w[i]));
+
+		}
+		else if(strcmpi("RT",w[i])==0)
+		{
+			i++;
+			turn(extractParameter(w[i]));
+		}
+		else if(strcmpi("LT",w[i])==0)
+		{
+			i++;
+			turn(-extractParameter(w[i]));
+		}
+		/*else if(strcmpi("REPEAT",w[i])==0)
+		{
+			int brace=0,rbrace=0;
+			int endindex=0;
+			i++;
+			int loop= extractParameter(w[i]);
+			for(int k=i;k<MAX_TOKEN;k++)
+			{
+			if(strcmpi("[",w[k])==0)
+			{
+				brace++;
+			}
+			else if(strcmpi("]",w[k])==0)
+			{
+				rbrace++;
+				if(rbrace==brace)
+				{
+				endindex=k;
+				break;
+				}
+			}
+			}
+			for(int x=0;x<loop;x++)
+			{
+			analyze(w,i+2,endindex);
+			}
+			i=endindex;
+
+		}*/
+		else if(strcmpi("REPEAT",w[i])==0)
+		{
+			i++;
+			int n=extractParameter(w[i]);
+			int start=0,end=0;
+			for(int k=i+1;k<MAX_TOKEN;k++)
+			{
+			if(strcmpi("[",w[k])==0)
+			{
+				start=k+1;
+				break;
+			}
+			}
+			for(k=MAX_TOKEN-1;k>i;k--)
+			{
+			if(strcmpi("]",w[k])==0)
+			{
+				end=k;
+				break;
+			}
+			}
+			for(k=0;k<n;k++)
+			analyze(w,start,end);
+			i=end;
+		}
+		else if(strcmpi("EXIT",w[i])==0)
+		{
+			exit(0);
+		}
+		else if(strcmpi("PU",w[i])==0)
+		{
+			penstat=UP;
+			pestat=WRITE;
+
+		}
+		else if(strcmpi("PD",w[i])==0)
+		{
+			penstat=DOWN;
+			pestat=WRITE;
+		}
+		else if(strcmpi("PE",w[i])==0)
+		{
+			pestat=ERASE;
+		}
+		else if(strcmpi("CLS",w[i])==0)
+		{
+			cleardevice();
+			moveto(250,199);
+			angle=-90.00000;
+		}
+		else if(w[i][0]==' ' || w[i][0]=='[' || w[i][0]==']' || w[i][0]=='\0' || w[i][0]==13)
+		{
+		//
+		}
+		else
+		{
+		int x1=getx(),y1=gety();
+		setcolor(charcolor);
+		outtextxy(0,415,"INVALID INPUT");
+		setcolor(fcolor);
+		moveto(x1,y1);
+		getch();
+		}
+	}
+	setcolor(currcolor);
+
+
+}
+
+void drawturtle();
+void eraseturtle();
+void fill(int x,int y,int pc,int nc)
+{
+
+	if(x<=0 || x>=500 || y<=0 || y>=398)
+	return;
+	if(getpixel(x,y)==pc)
+	{
+	putpixel(x,y,nc);
+	fill(x+1,y,pc,nc);
+	fill(x-1,y,pc,nc);
+	fill(x,y+1,pc,nc);
+	fill(x,y-1,pc,nc);
+	}
+
+}
+void settoolmode(int&,int&,int&);
+void mousedraw(int &but,int &px,int &py)
+{
+	int prevx,prevy;
+	getfillsettings(backup);
+	while(!kbhit())
+	{
+		getmousepos(&but,&px,&py);
+		if((but & 1)==1 && toolmode!=0)
+		{
+			retry:
+			if(px>500 || py>398)
+			{
+			getmousepos(&but,&px,&py);
+			settoolmode(but,px,py);
+			goto retry;
+			}
+			//restrictmouseptr(1,1,500,398);
+			hidemouseptr();
+			prevx=px;
+			prevy=py;
+			if(toolmode==1 || toolmode==2)
+			{
+			setfillstyle(SOLID_FILL,fcolor);
+			while((but & 1)==1 && px<=500 && py<=398)
+			{
+				setcolor(fcolor);
+				restrictmouseptr(1,1,499,397);
+				//pencilmode
+				if(toolmode==1 || toolmode==4)
+				line(prevx,prevy,px,py);
+				//brush mode
+				else if(toolmode==2)
+				{
+				restrictmouseptr(1+5,1+5,499-5,397-5);
+
+
+				fillellipse(prevx,prevy,5,5);
+
+				}
+				prevx=px;
+				prevy=py;
+				getmousepos(&but,&px,&py);
+			}
+			}
+			showmouseptr();
+			restrictmouseptr(1,1,639,479);
+		}
+		if((but&1)==1 && toolmode==3)
+		{
+			setfillstyle(SOLID_FILL,fcolor);
+			restrictmouseptr(1,1,500,398);
+			while((but&1)==1)
+			{
+			getmousepos(&but,&px,&py);
+			hidemouseptr();
+
+			if(!(px<=0 || px>=500 || py<=0 || py>=398))
+			fill(px,py,getpixel(px,py),fcolor);
+			showmouseptr();
+			}
+			restrictmouseptr(1,1,639,479);
+
+		}
+		setfillstyle(backup->pattern,backup->color);
+		//setcolor(15);
+	}
+}
+
+void drawframe()
+{
+	setcolor(interfacecolor);
+	bar(1,405,638,478);
+	bar(506,1,638,398);
+	rectangle(0,0,500,398);
+	rectangle(0,402,639,479);
+	rectangle(505,0,639,398);
+	setcolor(fcolor);
+
+}
+void makepallete()
+{
+	setcolor(interfacecolor);
+       rectangle(545,10,632,260);
+       for(int i=0;i<=7;i++)
+       {
+	setfillstyle(SOLID_FILL,i);
+	rectangle(561-10,15+30*i,597-10,15+30*(i+1));
+	bar(562-10,17+30*i-1,596-10,14+30*(i+1));
+	setfillstyle(SOLID_FILL,8+i);
+	rectangle(598-10,15+30*i,636-10,15+30*(i+1));
+	bar(598-10,17+30*i-1,636-11,14+30*(i+1));
+       }
+       fillcoloricon(550,270,toolmode);
+       pencilicon(581,270,toolmode);
+	brushicon(550,300,toolmode);
+	setfillstyle(SOLID_FILL,fcolor);
+	rectangle(580,301,611,330);
+
+	bar(581,302,610,329);
+	setfillstyle(SOLID_FILL,0);
+	setcolor(fcolor);
+}
+void settoolmode(int &but,int &px,int &py)
+{
+
+	while(!kbhit())
+	{
+		getmousepos(&but,&px,&py);
+		if((but&1)==1)
+		{
+		hidemouseptr();
+		for(int k=0;k<=7;k++)
+		{
+		if(py>=15+30*k && py<45+30*k)
+		{
+			if(px>=551 && px<587)
+			{
+				fcolor=k;
+				setcolor(fcolor);
+				//goto skip;
+			}
+			else if(px>=587 && px<=626)
+			{
+				fcolor=8+k;
+				setcolor(fcolor);
+				//goto skip;
+			}
+		}
+		}
+		if(py>=270 && py<=300)
+		{
+		if(px>550 && px<=580)
+		toolmode=3;
+		else if(px>580 && px<=610)
+		toolmode=1;
+		}
+		else if(py>=301 && py<=330)
+		{
+			if(px>550 && px<=580)
+			toolmode=2;
+		}
+		//drawframe();
+		//bar(506,1,638,398);
+		makepallete();
+		showmouseptr();
+		if(px<=500 && py<=398 && toolmode!=0)
+		return;
+		}
+	}
+}
+void main()
+{
+
+	int gd=DETECT,gm,button,mx,my;
+	initgraph(&gd,&gm,"C:\\turboc3\\bgi");
+	int oldx=250,oldy=199;
+	angle=-90.0;
+	turn(0.0000000);
+	initmouse();
+	restrictmouseptr(1,1,639,479);
+	showmouseptr();
+	getmousepos(&button,&mx,&my);
+	setfillstyle(1,getbkcolor());
+	drawframe();
+	while(1)
+	{
+
+	moveto(0,405);
+	showmouseptr();
+	drawframe();
+	makepallete();
+	art:
+	settoolmode(button,mx,my);
+
+	mousedraw(button,mx,my);
+	command();
+	hidemouseptr();
+	tokenize();
+	bar(1,405,638,478);
+	moveto(oldx,oldy);
+	analyze(w,0,MAX_TOKEN);
+	oldx=getx();
+	oldy=gety();
+	MAX_TOKEN=0;
+
+       }
+	//getch();
+	//closegraph();
+	//restorecrtmode();
+}
+
